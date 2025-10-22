@@ -1,23 +1,44 @@
 name: Deploy Shiny to shinyapps.io
+
 on:
   push:
-    branches: [ main ]   # anpassen falls nötig
+    branches: [ main ]        # ggf. anpassen (z.B. master)
+  workflow_dispatch:
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: r-lib/actions/setup-r@v2
-      - uses: r-lib/actions/setup-renv@v2   # optional, falls du renv nutzt
-        with: { cache-version: 1 }
-        continue-on-error: true
-      - name: Install rsconnect
-        run: Rscript -e 'install.packages("rsconnect", repos="https://cloud.r-project.org")'
-      - name: Deploy
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        # optional: feste R-Version
+        # with:
+        #   r-version: '4.3.3'
+
+      # 1) System-Bibliotheken für R-Pakete (v.a. curl, xml2, httr usw.)
+      - name: Install system libraries
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev
+
+      # 2) R-Abhängigkeiten installieren (hier nur rsconnect)
+      - name: Install rsconnect (via r-lib)
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: rsconnect
+          needs: deploy
+
+      # 3) Deploy
+      - name: Deploy to shinyapps.io
         env:
           SHINYAPPS_NAME: ${{ secrets.SHINYAPPS_NAME }}
           SHINYAPPS_TOKEN: ${{ secrets.SHINYAPPS_TOKEN }}
           SHINYAPPS_SECRET: ${{ secrets.SHINYAPPS_SECRET }}
         run: |
           Rscript -e 'rsconnect::setAccountInfo(Sys.getenv("SHINYAPPS_NAME"), Sys.getenv("SHINYAPPS_TOKEN"), Sys.getenv("SHINYAPPS_SECRET"))'
-          Rscript -e 'rsconnect::deployApp(appDir=".", appName="mein-vortrag", forceUpdate=TRUE)'
+          # Falls deine App NICHT im Repo-Root liegt, appDir="pfad/zur/app" setzen.
+          Rscript -e 'rsconnect::deployApp(appDir=".", appName="ternary-complexes", forceUpdate=TRUE, launch.browser=FALSE)'
